@@ -1,0 +1,126 @@
+---
+title: "Assignment 1 DECS-345"
+author: "Sebastian Salomon"
+date: "2022-09-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# Assignment 1
+## 1 Learning Checks
+
+Answer the following questions in your own words. None of your answers should be longer than one paragraph.
+
+
+### 1. (easy) What is OLS? How is it related to the linear model?
+
+Ordinary Least Squares (OLS) is a least square method for estimating unknown parameters in a linear regression model. It chooses the parameters by minimizing the sum of squares of the error. Error = difference between observed values and predicted values. 
+
+### 2. (medium) What do the coefficients in a linear model tell us?
+
+It tells us whether there is a positive or negative correlation between the independent and the dependent variable. It also tells us the magnitude of such correlation. 
+
+
+### 3. (hard) Why can the estimated intercept in a linear model sometimes not be given a sensible interpretation?
+
+There are various cases where the x axis can't be 0. In these cases the interpretation of the intercept won't seem realistic in the real world. The model, however, can still be useful to interpret by using reasonable x values. 
+
+
+### 4. Estimate a linear regression with mortality as outcome and caseweight as independent variable. Based on this regression, what is the expected change in patient mortality if Kletzl Hills hires ten additional FTE nurses?
+
+```{r hospitals, echo=TRUE, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(haven)
+
+
+hospital_data <- read_dta('C:/Users/ssalo/Documents/2022FA_DECS_435-0_SEC1/hospitalA.dta')
+
+lm(mortality ~ nsr, data = hospital_data) %>% summary()
+
+
+ggplot(data=hospital_data, aes(x=nsr, y=mortality)) +
+  geom_point(stat="identity")+ 
+  geom_smooth(method='lm')
+
+
+```
+
+Kletzl Hills currently has the following data:<br/>
+
+* Caseweight: 1.427
+* NSR:        0.6302478 = (Avg full time nurses = x)/(Avg number of staffed hospital beds = 150 beds)
+* Mortality:  3.86%
+
+
+At this moment the average full time nurses is equal to: $x = .63 * 150 = 94.5$ 
+If Kletzl hires 10 extra full time nurses the new NSR would be $104.5/150 = .6966$
+That is an increase of $.6966 - .63024 = .06642$
+The model tells us that for every 1 point increase in nsr, we get 3.133% decrease in mortality. 
+**So a .06642 increase in nsr would give us a .208% decrease in mortality.** 
+
+
+### 5. What is the expected change in patient mortality if Kletzl Hills hires ten additional FTE nurses, holding caseweight fixed?
+
+
+```{r hospitals2, echo=TRUE, message = FALSE}
+
+
+fit_caseweight <- lm(mortality ~ nsr + caseweight, data = hospital_data)
+summary(fit_caseweight)
+
+ggplot(data=hospital_data, aes(x=nsr, y=mortality)) +
+geom_point(aes(color = caseweight), size = 3) +
+  scale_color_gradientn(colors = c("#00AFBB", "#E7B800", "#FC4E07"))+
+  stat_smooth(method='lm', se=FALSE)
+
+
+
+```
+
+
+Kletzl Hills currently has the following data:<br/>
+
+* Caseweight: 1.427
+* NSR:        0.6302478 = (Avg full time nurses = x)/(Avg number of staffed hospital beds = 150 beds)
+* Mortality:  3.86%
+
+
+At this moment the average full time nurses is equal to: $x = .63 * 150 = 94.5$ 
+If Kletzl hires 10 extra full time nurses the new NSR would be $104.5/150 = .6966$
+That is an increase of $.6966 - .63024 = .06642$
+The model tells us that for every 1 point increase in nsr, we get 5.2861% decrease in mortality. 
+**So a .06642 increase in nsr would give us a .3511% decrease in mortality.** 
+
+
+### 6. Does controlling for caseweight affect the expected change in patient mortality if Kletzl Hills hires ten additional FTE nurses? Which estimate should you trust more and why?
+
+Yes, an estimated parameter will not change when a new variable is added only if the parameters are completely uncorrelated. In practice this will very rarely be the case, so controlling for caseweight does affect the expected change in patient mortality. 
+
+I trust the estimate of the 2nd model, the model where we control for caseweight, more. 
+The adjusted R squared value of the 2nd model is a little higher meaning that more of the data is explained by the model. Also, the p-value for the nsr coefficient is lower in the 2nd model, so it has a greater statistical relationship to the dependent variable than the coefficient of the 1st model does. 
+
+
+### 7. With the addition of 10 nurses, what is your best estimate for the expected increase in bonus?
+
+The additional 10 nurses would give us a .06642 increase in nsr and the model gives us a .3511% decrease in mortality. 
+
+Bonus reduction without increase in staff:<br/>
+$5 million × 3.86  =  19.3 million$
+
+New Bonus reduction with increase in staff:<br/>
+$5 million × (3.86 - .3511)  =  17.544 million$ 
+
+Expected increase in bonus:<br/>
+$19.3 - 17.544 = 1.7555 million$
+
+### 8. Using your best managerial judgement, what course of action would you recommend and why?
+
+The expected increase in bonus calculated using the 2nd model gives the hospital an expected 1.7555 million increase in bonus. But we have to take into account the costs of bringing 10 staff into the hospital. The cost per staff is: $60,000 * 10 = .6 million$. Since the expected increase is much higher than the cost of bringing 10 new staff members, I would recommend Dr. Newport to hire the 10 staff members. 
+
+
+
+
