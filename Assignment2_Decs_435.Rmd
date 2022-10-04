@@ -1,0 +1,254 @@
+---
+title: "Assignment 2 Decs 435"
+author: "Sebastian Salomon"
+date: "2022-09-27"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+# Assignment 1
+
+## * Learning Checks
+
+Answer the following questions in your own words. None of your answers should be longer than one paragraph.
+
+### 1. (easy) What is the standard error of an estimate? Why is it useful?
+This represents the average distance that the observed values fall from the regression line. Useful since it tells us how good or bad our current predicted line is to the actual line. 
+
+### 2. (medium) Explain why it is wrong to claim that "if an estimate is statistically significant at the 5%-level, then the probability that the true value equals 0 is less than 5%."
+
+
+When an estimate is statistically significant at 5% level then this means that there is a 5% risk of concluding that a difference exists when there is no actual difference. This is the probability of rejecting the null, not the probability of accepting the alternative. So statistical at 5% does not mean that the probability that the true value equals 0 is 5%.
+
+### 3. (hard) What is the difference between a one-sided and a two-sided hypothesis test? Give an example of a business problem in which you should use a one-sided rather than a two-sided test.
+
+One tailed tests allow for the possibility of an effect in one direction, where two-tailed tests account for the possibility of an effect in two directions (positive and negative). So an example of a business problem where we would use a one-sided test could be when determining the probability of increasing our current margins by a certain percentage. Since you are only taking into account the probability of increasing, you ignore completely the left hand side of the tail and it becomes one-sided. On the other hand if we want to take the probability the the margins are going to be within a certain bound, that's when we use a two-sided test since we have to take into account the negative and the positive side of the tails. 
+
+## * Benchmarking Chikuho Bank
+
+### 4. Choose an appropriate benchmarking group for Chikuho based only on subsidiary status (see the variable subsidiary). 
+
+
+
+```{r Chikuho_bank, echo=TRUE, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+library(haven)
+library(knitr)
+library(kableExtra)
+library(sjPlot)
+
+hospital_data <- read_dta('C:/Users/ssalo/Documents/2022FA_DECS_435-0_SEC1/banksjapan_benchmarking.dta')
+
+
+
+
+
+df_benchm <- hospital_data %>% filter(., subsidiary == 0) %>%        #< exclude subsidiary banks
+   mutate(av_margin = mean(margin),
+         simple_rank = dense_rank(desc(margin))) %>%     #< rank observations by margin, FROM HIGH TO LOW!
+   arrange(simple_rank)                         #< sort by naïve rank
+
+head(df_benchm %>% select(., name, margin, simple_rank))
+
+```
+
+The benchmarking group that I chose starts by excluding subsidiary banks, and then including a simple_rank chosen by the margin, and the mean margin is done to compare the current margin with the margin for specific banks. 
+
+### How many banks are in this group? 
+```{r Chikuho_bank_b, echo=TRUE, message = FALSE}
+
+print(paste0("Number of banks in benchmarking group: ", nrow(df_benchm)))
+head(df_benchm) #< "best" banks
+
+```
+
+### What is Chikuho’s position in this group when the group is naively ordered by profit margin?
+```{r Chikuho_bank_c, echo=TRUE, message = FALSE}
+
+
+df_benchm %>% select(name, av_margin, margin, simple_rank) %>%
+  filter(name=="CHIKUHO BANK")                  #< find Chikuho Bank
+
+
+```
+
+Chikuho bank is ranked #76.
+
+### 5. Use regression analysis to develop a meaningful ranking. Be sure to follow all of the necessary steps in model building. Be sure to have a cogent business justification for your variable choices. You should draw on information in the case. You can also feel free to use concepts that you have learned in other courses at Kellogg, or through your past experiences that might help you identify potentially relevant factors. 
+
+The variables that I chose for the regression are metropopulation since they mentioned that it could be a factor, also year_of_incorporation, since the article pointed to the fact that the year were they started might have an impact, and also the size of the bank. The article mentioned that medium sized banks might have an advantage over big and small banks. 
+
+```{r Chikuho_bank2, echo=TRUE, message = FALSE}
+
+df_benchm_improved <- df_benchm %>% 
+   mutate(size_tercile = factor(ntile(totalassets, 3))) #< create factor variable for tercile to control for size in regression below
+bm_reg <- lm(margin ~ metropop + size_tercile + year_of_incorporation, data = df_benchm_improved)
+tab_model(bm_reg)
+#summary(bm_reg)
+
+
+df_benchm_improved <- df_benchm_improved %>%
+ mutate(predicted_value = bm_reg$fitted.values,
+       residual = margin - predicted_value) %>% #< calculate residuals
+mutate(better_rank = dense_rank(desc(residual))) %>% #< need to rank HIGH to LOW!
+      arrange(better_rank)                      #< sort by better rank
+
+```
+
+### Where is Chikuho Bank in your ranking?
+
+```{r Chikuho_bank2_b, echo=TRUE, message = FALSE}
+
+df_benchm_improved %>% select(name, margin, predicted_value, residual, better_rank) %>%
+  filter(name=="CHIKUHO BANK")                     #< find Chikuho Bank
+
+```
+
+
+### List the top 5 banks according to your ranking. 
+
+```{r Chikuho_bank2_c, echo=TRUE, message = FALSE}
+
+head(df_benchm_improved %>% select(name, margin, predicted_value, residual, better_rank)) #< best banks
+
+
+```
+
+### List the bottom 5 banks according to your ranking. 
+
+```{r Chikuho_bank2_d, echo=TRUE, message = FALSE}
+tail(df_benchm_improved %>% select(name, margin, predicted_value, residual, better_rank)) #< best banks
+
+```
+
+### 6. Prepare a Deficiency Table based on your regression to help explain Chikuho Bank’s relatively poor margins. What are the main conclusions you draw from the table you construct?
+
+```{r Chikuho_bank3, echo=TRUE, message = FALSE}
+metropop <-df_benchm_improved %>% filter(name=="CHIKUHO BANK") %>% select(metropop)
+ metropop_avg <-mean(df_benchm_improved$metropop)
+ metropop_delta <- metropop-metropop_avg
+ metropop_beta <- bm_reg$coefficients[2]
+ size_tercile <-df_benchm_improved %>% filter(name=="CHIKUHO BANK") %>% select(size_tercile)
+ size_tercile_avg <- mean(as.numeric(df_benchm_improved$size_tercile))
+ size_tercile_delta <- as.numeric(size_tercile) - as.numeric(size_tercile_avg)
+ size_tercile_beta <- 0# bm_reg$coefficients[3]
+year_of_incorporation<- df_benchm_improved %>% filter(name=="CHIKUHO BANK") %>% select(year_of_incorporation)
+ year_of_incorporation_avg <-mean(df_benchm_improved$year_of_incorporation)
+ year_of_incorporation_delta <- year_of_incorporation - year_of_incorporation_avg
+ year_of_incorporation_beta <-  bm_reg$coefficients[5]
+ 
+deficiency_table <- matrix(c(metropop, metropop_avg,metropop_delta ,metropop_beta, metropop_delta*(metropop_beta),
+      size_tercile, size_tercile_avg, size_tercile_delta, size_tercile_beta,size_tercile_delta*(size_tercile_beta),
+      year_of_incorporation, year_of_incorporation_avg, year_of_incorporation_delta, year_of_incorporation_beta, year_of_incorporation_delta*year_of_incorporation_beta,
+      '','','','',metropop_delta*(metropop_beta) + size_tercile_delta*(size_tercile_beta) + year_of_incorporation_delta*year_of_incorporation_beta ), ncol=5, byrow=TRUE)
+rownames(deficiency_table) <- c('metropop','size_tercile','year_of_incorporation', 'Relative_to_Avg' )
+colnames(deficiency_table) <- c('Chikuho_Bank','Sample_Average','Delta', 'B', '(B * Delta)')
+
+
+
+as.data.frame(deficiency_table) %>%
+  kbl() %>%
+  kable_classic_2(full_width = F)
+
+
+
+```
+
+The deficiency table indicates that the metropop variable had the biggest effect for the margins on Chikuho_Bank. 
+Compared to the average bank, Chikuho_Bank was predicted to have -.62 fewer margin percentage. We're finding some reason on why Chikuho_Bank is doing worse than other banks, but not enough to determine the magnitude of why it's doing as bad as it's actually doing. 
+
+
+### 7. Using the same benchmarking group as you did for Part I, augment your previous regression so that it can help you identify changes that Chikuho might make in order to improve its profit margins. What variables did you add and why?
+
+
+```{r Chikuho_bank4, echo=TRUE, message = FALSE}
+
+df_benchm_final <- df_benchm_improved %>% mutate(execratio = executives/ employees)
+bm_reg2 <- lm(margin ~ execratio + probloanpct + metropop + size_tercile, data = df_benchm_final)
+#summary(bm_reg2)
+
+tab_model(bm_reg2)
+
+```
+For this question I used the same variables as before, but added execratio and probloanpct. These variables were important to see if the ratio between executives and employees had an impact on Banks margins. And also to check the ratio of problem loans to regular loans and decide if that ratio is a determining factor. I also took out the year_of_incorporation because it seemed to affect the mlr in a negative way. When I took it out the F-statistic rose, and the p-value of the model decreased. So this indicates that it was affecting the model negatively. 
+
+
+### 8. Are the variables you added statistically significant? 
+
+After taking out the year_of_incorporation, the rest of the variables with the exception of execration were statistically significant at a 95% confidence interval. When looking at execratio we can use other factors apart from the p-value to determine if it might be useful in the model. When excluding the variable execration I noticed that the p-value of the whole model very slightly decreased. Not enough to be a significant problem, but most of the indications point to the fact that execratio might not be helping our model.  
+
+### What are the associated 95%-confidence intervals?
+
+```{r Chikuho_bank5, echo=TRUE, message = FALSE}
+
+confint(bm_reg2)
+
+```
+
+
+
+
+### 9. Prepare a Deficiency Table for Chikuho Bank based on your analysis above.
+
+```{r Chikuho_bank6, echo=TRUE, message = FALSE}
+metropop <-df_benchm_final %>% filter(name=="CHIKUHO BANK") %>% select(metropop)
+ metropop_avg <-mean(df_benchm_final$metropop)
+ metropop_delta <- metropop-metropop_avg
+ metropop_beta <- bm_reg2$coefficients[4]
+ metropop_mult <- metropop_delta*metropop_beta
+ size_tercile <-df_benchm_final %>% filter(name=="CHIKUHO BANK") %>% select(size_tercile)
+ size_tercile_avg <- mean(as.numeric(df_benchm_final$size_tercile))
+ size_tercile_delta <- as.numeric(size_tercile) - as.numeric(size_tercile_avg)
+ size_tercile_beta <- 0 #bm_reg2$coefficients[5]
+ size_tercile_mult <-size_tercile_delta*size_tercile_beta
+#year_of_incorporation<- df_benchm_final %>% filter(name=="CHIKUHO BANK") %>% select(year_of_incorporation)
+# year_of_incorporation_avg <-mean(df_benchm_final$year_of_incorporation)
+# year_of_incorporation_delta <- year_of_incorporation - year_of_incorporation_avg
+# year_of_incorporation_beta <-  bm_reg2$coefficients[6]
+# year_of_incorporation_mult <- year_of_incorporation_delta*year_of_incorporation_beta
+ execratio <-df_benchm_final %>% filter(name=="CHIKUHO BANK") %>% select(execratio)
+ execratio_avg <-mean(df_benchm_final$execratio)
+ execratio_delta <- execratio-execratio_avg
+ execratio_beta <- bm_reg2$coefficients[2]
+ execratio_mult <- execratio_delta*execratio_beta
+ probloanpct <-df_benchm_final %>% filter(name=="CHIKUHO BANK") %>% select(probloanpct)
+ probloanpct_avg <-mean(df_benchm_final$probloanpct)
+ probloanpct_delta <- probloanpct-probloanpct_avg
+ probloanpct_beta <- bm_reg2$coefficients[3]
+ probloanpct_mult <- probloanpct_delta*probloanpct_beta
+ 
+ 
+defficiency_table <- matrix(c(metropop, metropop_avg,metropop_delta ,metropop_beta, metropop_mult,
+      size_tercile, size_tercile_avg, size_tercile_delta, size_tercile_beta,size_tercile_mult,
+      #year_of_incorporation, year_of_incorporation_avg, year_of_incorporation_delta, year_of_incorporation_beta, year_of_incorporation_mult,
+      execratio, execratio_avg,execratio_delta ,execratio_beta, execratio_mult,
+      probloanpct, probloanpct_avg,probloanpct_delta ,probloanpct_beta, probloanpct_mult,
+      '','','','',metropop_mult + size_tercile_mult  +execratio_mult + probloanpct_mult  ), ncol=5, byrow=TRUE)
+rownames(defficiency_table) <- c('metropop','size_tercile','execratio', 'probloanpct', 'Relative_to_Avg' )
+colnames(defficiency_table) <- c('Chikuho_Bank','Sample_Average','Delta', 'B', '(B * Delta)')
+
+
+
+as.data.frame(defficiency_table) %>%
+  kbl() %>%
+  kable_classic_2(full_width = F)
+
+
+
+
+```
+
+The deficiency table indicates that the probloanpct variable had the biggest effect for the margins on Chikuho_Bank. 
+Compared to the average bank, Chikuho_Bank was predicted to have -4.42 fewer margin percentage. With probloanpct we found better reasons on why Chikuho_Bank is doing worse than other banks. This table is consistent with the regression that said that probloanpct had the biggest impact in the model.  
+
+
+
+### 10. What managerial recommendations would you make to Chikuho Bank after examining the new regression output and Deficiency Table?
+
+After examining the latest regression results and deficiency table I would recommend the CEO to focus on reducing the percentage of bad loans. The current percentage for Chikuho Banks is much higher than the rest, and from our analysis this seems to be the main variable affecting margins. 
+
+
+
